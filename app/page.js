@@ -195,7 +195,7 @@ export default function Home() {
     try {
       const { data } = await api.post("/auth/send-otp", { email });
       setOtpSent(true);
-      toast.success(data.message || "OTP sent. Please check your Gmail.");
+      toast.success(data.message || "OTP sent. Please check your email.");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to send OTP");
       setOtpSent(false);
@@ -469,7 +469,7 @@ export default function Home() {
           <section className={`${cardClass} p-6`}>
             <h2 className="mb-1 text-xl font-semibold">Welcome</h2>
             <p className="mb-5 text-sm opacity-80">
-              {authMode === "signin" ? "Sign in using email and password." : "Sign up using OTP sent to your Gmail."}
+              {authMode === "signin" ? "Sign in using email and password." : "Sign up using OTP sent to your email."}
             </p>
             <div className="mb-4 flex gap-2">
               <button
