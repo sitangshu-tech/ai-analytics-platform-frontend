@@ -4,7 +4,11 @@ import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 
-const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api" });
+const fallbackApiUrl =
+  process.env.NODE_ENV === "production"
+    ? "https://ai-analytics-platform-backend.onrender.com/api"
+    : "http://localhost:5000/api";
+const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL || fallbackApiUrl });
 const sampleQuestions = ["Which category has highest value?", "Show trend over time", "What is the average of first numeric column?"];
 const plans = [
   { key: "free", title: "Free", limit: "3 reports / month", price: "0" },
@@ -494,7 +498,7 @@ export default function Home() {
             <div className="grid gap-3 md:grid-cols-2">
               <input
                 className={softInput}
-                placeholder="Username / Email"
+                placeholder="Email"
                 value={authForm.email}
                 onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
               />
