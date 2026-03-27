@@ -196,7 +196,6 @@ export default function Home() {
       const { data } = await api.post("/auth/send-otp", { email });
       setOtpSent(true);
       toast.success(data.message || "OTP sent. Please check your Gmail.");
-      if (data?.otp) toast.success(`OTP (dev fallback): ${data.otp}`);
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to send OTP");
       setOtpSent(false);
