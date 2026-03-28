@@ -39,6 +39,8 @@ export default function Home() {
   const [cpNew, setCpNew] = useState("");
   const [cpConfirm, setCpConfirm] = useState("");
   const [cpBusy, setCpBusy] = useState(false);
+  const [showSignupPasswordModal, setShowSignupPasswordModal] = useState(false);
+  const [signupTempPassword, setSignupTempPassword] = useState("");
   const currentPlan = user?.plan || "free";
   const cardClass =
     theme === "dark"
@@ -204,7 +206,7 @@ export default function Home() {
 
   const verifySignupOtp = async () => {
     const email = authForm.email.trim();
-    const otp = authForm.otp.trim();
+    const otp = authForm.otp.replace(/\s/g, "");
     if (!email || !otp) return toast.error("Enter email and OTP");
     try {
       const { data } = await api.post("/auth/register/verify", { email, otp });
@@ -218,7 +220,8 @@ export default function Home() {
       await loadDatasets();
       toast.success("Account created successfully");
       if (data.tempPassword) {
-        toast.success(`Your temporary password (save it): ${data.tempPassword}`, { duration: 12000 });
+        setSignupTempPassword(data.tempPassword);
+        setShowSignupPasswordModal(true);
       }
     } catch (e) {
       toast.error(e.response?.data?.message || "OTP verification failed");
@@ -541,6 +544,13 @@ export default function Home() {
                 </>
               )}
             </div>
+
+            {authMode === "signup" && otpSent && (
+              <p className={`mt-3 text-xs leading-relaxed ${theme === "dark" ? "text-zinc-400" : "text-slate-600"}`}>
+                Use the <strong>6-digit code</strong> from the email. If the message only shows a button/link and no code, open Supabase → Authentication → Email templates → edit
+                &quot;Magic Link&quot; (or OTP) and add the line: <code className="rounded bg-black/20 px-1">Your code: {"{{ .Token }}"}</code>
+              </p>
+            )}
           </section>
         )}
 
@@ -728,6 +738,49 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {showSignupPasswordModal && signupTempPassword && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowSignupPasswordModal(false)}
+        >
+          <div
+            className={`w-full max-w-md rounded-2xl p-5 ${
+              theme === "dark" ? "bg-zinc-900 border border-zinc-800" : "bg-white border border-slate-200"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold">Save your temporary password</h3>
+            <p className={`mt-2 text-sm ${theme === "dark" ? "text-zinc-300" : "text-slate-600"}`}>
+              This is shown once. Use it to sign in, then change it from your profile.
+            </p>
+            <div
+              className={`mt-4 rounded-xl border p-3 font-mono text-sm break-all ${
+                theme === "dark" ? "border-zinc-700 bg-zinc-950" : "border-slate-200 bg-slate-50"
+              }`}
+            >
+              {signupTempPassword}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(signupTempPassword);
+                toast.success("Copied to clipboard");
+              }}
+              className="mt-4 w-full rounded-xl bg-indigo-600 px-3 py-2 text-white"
+            >
+              Copy password
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSignupPasswordModal(false)}
+              className={`mt-2 w-full rounded-xl px-3 py-2 ${theme === "dark" ? "bg-zinc-800" : "bg-slate-100"}`}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {showChangePassword && isAuthed && (
         <div
