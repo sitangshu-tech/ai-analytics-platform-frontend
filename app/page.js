@@ -21,7 +21,7 @@ export default function Home() {
   const [token, setToken] = useState("");
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState("signin");
-  const [authForm, setAuthForm] = useState({ email: "", otp: "", password: "" });
+  const [authForm, setAuthForm] = useState({ email: "", otp: "", password: "", passwordConfirm: "" });
   const [otpSent, setOtpSent] = useState(false);
   const [datasets, setDatasets] = useState([]);
   const [dataset, setDataset] = useState(null);
@@ -39,8 +39,6 @@ export default function Home() {
   const [cpNew, setCpNew] = useState("");
   const [cpConfirm, setCpConfirm] = useState("");
   const [cpBusy, setCpBusy] = useState(false);
-  const [showSignupPasswordModal, setShowSignupPasswordModal] = useState(false);
-  const [signupTempPassword, setSignupTempPassword] = useState("");
   const currentPlan = user?.plan || "free";
   const cardClass =
     theme === "dark"
@@ -207,22 +205,25 @@ export default function Home() {
   const verifySignupOtp = async () => {
     const email = authForm.email.trim();
     const otp = authForm.otp.replace(/\s/g, "");
+    const password = authForm.password;
+    const passwordConfirm = authForm.passwordConfirm;
     if (!email || !otp) return toast.error("Enter email and OTP");
+    if (!password || !passwordConfirm) return toast.error("Enter password and confirmation");
+    if (password !== passwordConfirm) return toast.error("Passwords do not match");
+    if (!/^(?=.*[A-Z])(?=.*\d).{8,}$/.test(password)) {
+      return toast.error("Password must be 8+ chars, 1 uppercase, 1 number");
+    }
     try {
-      const { data } = await api.post("/auth/register/verify", { email, otp });
+      const { data } = await api.post("/auth/register/verify", { email, otp, password });
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
       setToken(data.token);
       setUser(data.user);
       setOtpSent(false);
-      setAuthForm({ email: "", otp: "", password: "" });
+      setAuthForm({ email: "", otp: "", password: "", passwordConfirm: "" });
       await loadDatasets();
       toast.success("Account created successfully");
-      if (data.tempPassword) {
-        setSignupTempPassword(data.tempPassword);
-        setShowSignupPasswordModal(true);
-      }
     } catch (e) {
       toast.error(e.response?.data?.message || "OTP verification failed");
     }
@@ -240,7 +241,7 @@ export default function Home() {
       setToken(data.token);
       setUser(data.user);
       setOtpSent(false);
-      setAuthForm({ email: "", otp: "", password: "" });
+      setAuthForm({ email: "", otp: "", password: "", passwordConfirm: "" });
       await loadDatasets();
       toast.success("Signed in successfully");
     } catch (e) {
@@ -475,14 +476,16 @@ export default function Home() {
           <section className={`${cardClass} p-6`}>
             <h2 className="mb-1 text-xl font-semibold">Welcome</h2>
             <p className="mb-5 text-sm opacity-80">
-              {authMode === "signin" ? "Sign in using email and password." : "Sign up using OTP sent to your email."}
+              {authMode === "signin"
+                ? "Sign in using email and password."
+                : "Sign up: we email you a code, then you choose your password."}
             </p>
             <div className="mb-4 flex gap-2">
               <button
                 onClick={() => {
                   setAuthMode("signin");
                   setOtpSent(false);
-                  setAuthForm({ ...authForm, otp: "", password: "" });
+                  setAuthForm({ ...authForm, otp: "", password: "", passwordConfirm: "" });
                 }}
                 className={`rounded-xl px-3 py-2 text-sm ${authMode === "signin" ? "bg-indigo-600 text-white" : theme === "dark" ? "bg-zinc-800" : "bg-slate-200"}`}
               >
@@ -492,7 +495,7 @@ export default function Home() {
                 onClick={() => {
                   setAuthMode("signup");
                   setOtpSent(false);
-                  setAuthForm({ ...authForm, otp: "", password: "" });
+                  setAuthForm({ ...authForm, otp: "", password: "", passwordConfirm: "" });
                 }}
                 className={`rounded-xl px-3 py-2 text-sm ${authMode === "signup" ? "bg-emerald-600 text-white" : theme === "dark" ? "bg-zinc-800" : "bg-slate-200"}`}
               >
@@ -519,12 +522,31 @@ export default function Home() {
               ) : otpSent ? (
                 <input
                   className={softInput}
-                  placeholder="Enter OTP"
+                  placeholder="Enter OTP from email"
                   value={authForm.otp}
                   onChange={(e) => setAuthForm({ ...authForm, otp: e.target.value })}
                 />
               ) : null}
             </div>
+
+            {authMode === "signup" && otpSent && (
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <input
+                  className={softInput}
+                  placeholder="Create password (8+ chars, 1 uppercase, 1 number)"
+                  type="password"
+                  value={authForm.password}
+                  onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                />
+                <input
+                  className={softInput}
+                  placeholder="Confirm password"
+                  type="password"
+                  value={authForm.passwordConfirm}
+                  onChange={(e) => setAuthForm({ ...authForm, passwordConfirm: e.target.value })}
+                />
+              </div>
+            )}
 
             <div className="mt-4 flex gap-2">
               {authMode === "signin" ? (
@@ -538,7 +560,7 @@ export default function Home() {
                   </button>
                   {otpSent && (
                     <button onClick={verifySignupOtp} className="rounded-xl bg-emerald-600 px-4 py-2 text-white">
-                      Verify OTP
+                      Create account
                     </button>
                   )}
                 </>
@@ -738,49 +760,6 @@ export default function Home() {
           </>
         )}
       </div>
-
-      {showSignupPasswordModal && signupTempPassword && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setShowSignupPasswordModal(false)}
-        >
-          <div
-            className={`w-full max-w-md rounded-2xl p-5 ${
-              theme === "dark" ? "bg-zinc-900 border border-zinc-800" : "bg-white border border-slate-200"
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold">Save your temporary password</h3>
-            <p className={`mt-2 text-sm ${theme === "dark" ? "text-zinc-300" : "text-slate-600"}`}>
-              This is shown once. Use it to sign in, then change it from your profile.
-            </p>
-            <div
-              className={`mt-4 rounded-xl border p-3 font-mono text-sm break-all ${
-                theme === "dark" ? "border-zinc-700 bg-zinc-950" : "border-slate-200 bg-slate-50"
-              }`}
-            >
-              {signupTempPassword}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard.writeText(signupTempPassword);
-                toast.success("Copied to clipboard");
-              }}
-              className="mt-4 w-full rounded-xl bg-indigo-600 px-3 py-2 text-white"
-            >
-              Copy password
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowSignupPasswordModal(false)}
-              className={`mt-2 w-full rounded-xl px-3 py-2 ${theme === "dark" ? "bg-zinc-800" : "bg-slate-100"}`}
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
 
       {showChangePassword && isAuthed && (
         <div
