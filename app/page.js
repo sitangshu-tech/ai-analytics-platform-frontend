@@ -217,6 +217,9 @@ export default function Home() {
       setAuthForm({ email: "", otp: "", password: "" });
       await loadDatasets();
       toast.success("Account created successfully");
+      if (data.tempPassword) {
+        toast.success(`Your temporary password (save it): ${data.tempPassword}`, { duration: 12000 });
+      }
     } catch (e) {
       toast.error(e.response?.data?.message || "OTP verification failed");
     }
