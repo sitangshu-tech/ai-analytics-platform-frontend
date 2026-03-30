@@ -23,6 +23,12 @@ export default function Home() {
   const [authMode, setAuthMode] = useState("signin");
   const [authForm, setAuthForm] = useState({ email: "", otp: "", password: "", passwordConfirm: "" });
   const [otpSent, setOtpSent] = useState(false);
+  const [signupVerified, setSignupVerified] = useState(false);
+  const [signupToken, setSignupToken] = useState("");
+  const [sendOtpBusy, setSendOtpBusy] = useState(false);
+  const [verifyOtpBusy, setVerifyOtpBusy] = useState(false);
+  const [completeSignupBusy, setCompleteSignupBusy] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [datasets, setDatasets] = useState([]);
   const [dataset, setDataset] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -56,6 +62,8 @@ export default function Home() {
     setToken("");
     setUser(null);
     setOtpSent(false);
+    setSignupVerified(false);
+    setSignupToken("");
     setDataset(null);
     setDatasets([]);
     setChats([]);
@@ -192,40 +200,79 @@ export default function Home() {
   const sendOtp = async () => {
     const email = authForm.email.trim();
     if (!email) return toast.error("Please enter your email");
+    if (sendOtpBusy) return;
+    setSendOtpBusy(true);
     try {
       const { data } = await api.post("/auth/send-otp", { email });
       setOtpSent(true);
+      setSignupVerified(false);
+      setSignupToken("");
+      setResendCooldown(30);
       toast.success(data.message || "OTP sent. Please check your email.");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to send OTP");
       setOtpSent(false);
+      setSignupVerified(false);
+      setSignupToken("");
+    }
+    finally {
+      setSendOtpBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [resendCooldown]);
 
   const verifySignupOtp = async () => {
     const email = authForm.email.trim();
     const otp = authForm.otp.replace(/\s/g, "");
+    if (!email || !otp) return toast.error("Enter email and OTP");
+    if (verifyOtpBusy) return;
+    setVerifyOtpBusy(true);
+    try {
+      const { data } = await api.post("/auth/register/verify-otp", { email, otp });
+      setSignupVerified(true);
+      setSignupToken(data.signupToken || "");
+      toast.success("OTP verified. Now create your password.");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "OTP verification failed");
+    }
+    finally {
+      setVerifyOtpBusy(false);
+    }
+  };
+
+  const completeSignup = async () => {
     const password = authForm.password;
     const passwordConfirm = authForm.passwordConfirm;
-    if (!email || !otp) return toast.error("Enter email and OTP");
+    if (!signupVerified || !signupToken) return toast.error("Verify OTP first");
     if (!password || !passwordConfirm) return toast.error("Enter password and confirmation");
     if (password !== passwordConfirm) return toast.error("Passwords do not match");
     if (!/^(?=.*[A-Z])(?=.*\d).{8,}$/.test(password)) {
       return toast.error("Password must be 8+ chars, 1 uppercase, 1 number");
     }
+    if (completeSignupBusy) return;
+    setCompleteSignupBusy(true);
     try {
-      const { data } = await api.post("/auth/register/verify", { email, otp, password });
+      const { data } = await api.post("/auth/register/complete", { signupToken, password });
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
       setToken(data.token);
       setUser(data.user);
       setOtpSent(false);
+      setSignupVerified(false);
+      setSignupToken("");
       setAuthForm({ email: "", otp: "", password: "", passwordConfirm: "" });
       await loadDatasets();
       toast.success("Account created successfully");
     } catch (e) {
-      toast.error(e.response?.data?.message || "OTP verification failed");
+      toast.error(e.response?.data?.message || "Signup failed");
+    } finally {
+      setCompleteSignupBusy(false);
     }
   };
 
@@ -529,7 +576,7 @@ export default function Home() {
               ) : null}
             </div>
 
-            {authMode === "signup" && otpSent && (
+            {authMode === "signup" && otpSent && signupVerified && (
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <input
                   className={softInput}
@@ -555,13 +602,39 @@ export default function Home() {
                 </button>
               ) : (
                 <>
-                  <button onClick={sendOtp} className="rounded-xl bg-indigo-600 px-4 py-2 text-white">
-                    Send OTP
+                  <button
+                    onClick={sendOtp}
+                    disabled={sendOtpBusy || resendCooldown > 0}
+                    className={`rounded-xl bg-indigo-600 px-4 py-2 text-white transition disabled:opacity-60 ${
+                      sendOtpBusy || resendCooldown > 0 ? "cursor-not-allowed" : ""
+                    }`}
+                  >
+                    {sendOtpBusy ? "Sending..." : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Send OTP"}
                   </button>
                   {otpSent && (
-                    <button onClick={verifySignupOtp} className="rounded-xl bg-emerald-600 px-4 py-2 text-white">
-                      Create account
-                    </button>
+                    <>
+                      {!signupVerified ? (
+                        <button
+                          onClick={verifySignupOtp}
+                          disabled={verifyOtpBusy}
+                          className={`rounded-xl bg-emerald-600 px-4 py-2 text-white transition disabled:opacity-60 ${
+                            verifyOtpBusy ? "cursor-not-allowed" : ""
+                          }`}
+                        >
+                          {verifyOtpBusy ? "Verifying..." : "Verify OTP"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={completeSignup}
+                          disabled={completeSignupBusy}
+                          className={`rounded-xl bg-emerald-600 px-4 py-2 text-white transition disabled:opacity-60 ${
+                            completeSignupBusy ? "cursor-not-allowed" : ""
+                          }`}
+                        >
+                          {completeSignupBusy ? "Creating..." : "Create account"}
+                        </button>
+                      )}
+                    </>
                   )}
                 </>
               )}
